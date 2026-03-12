@@ -1,0 +1,62 @@
+[
+  {
+    "timestamp": "2026-03-12T18:51:35.168399Z",
+    "input": {
+      "income": 2500,
+      "credit_score": 400,
+      "debt_ratio": 0.3,
+      "employment_years": 6,
+      "loan_amount": 15001
+    },
+    "output": {
+      "decision": "rejected",
+      "risk_score": 100,
+      "reasons": [
+        "low_credit"
+      ],
+      "advice": [
+        "b'Improve credit behavior for 3\\xc3\\xa2\\xe2\\x82\\xac\\xe2\\x80\\x9c6 months; pay bills on time and reduce outstanding balances.'"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-03-12T18:55:47.220923Z",
+    "input": {
+      "income": 3000,
+      "credit_score": 900,
+      "debt_ratio": 0.8,
+      "employment_years": 10,
+      "loan_amount": 20000
+    },
+    "output": {
+      "decision": "rejected",
+      "risk_score": 100,
+      "reasons": [
+        "high_debt"
+      ],
+      "advice": [
+        "b'Lower your debt ratio: pay off existing loans/credit before reapplying.'"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-03-12T18:58:15.194864Z",
+    "input": {
+      "income": 3000,
+      "credit_score": 900,
+      "debt_ratio": 0.9,
+      "employment_years": 10,
+      "loan_amount": 20000
+    },
+    "output": {
+      "decision": "rejected",
+      "risk_score": 100,
+      "reasons": [
+        "high_debt"
+      ],
+      "advice": [
+        "b'Lower your debt ratio: pay off existing loans/credit before reapplying.'"
+      ]
+    }
+  }
+]
