@@ -5,6 +5,7 @@ prolog.consult("../knowledge_base/loan_kb.pl")
 
 
 def clear_kb():
+    """Clear all applicant facts that Python asserts."""
     prolog.retractall("income(_)")
     prolog.retractall("credit_score(_)")
     prolog.retractall("employment_years(_)")
@@ -13,6 +14,7 @@ def clear_kb():
 
 
 def set_applicant_data():
+    """Ask user for applicant data and assert into Prolog."""
     print("Loan Expert System – Ghana Edition (press Enter for unknown)")
     try:
         income_val = float(input("Monthly income (GHS, 0 if unknown): ") or 0)
@@ -21,20 +23,23 @@ def set_applicant_data():
     try:
         credit = int(input("Credit score (0–850, 0 if unknown): ") or 0)
     except (ValueError, TypeError):
-        credit = 0
+        credit = 500
     try:
         emp_years = float(input("Years of employment (0 if unknown): ") or 0)
     except (ValueError, TypeError):
-        emp_years = 0
+        emp_years = 1
     try:
         dti = float(input("Debt‑to‑income ratio (e.g., 0.3, 0 if unknown): ") or 0)
     except (ValueError, TypeError):
-        dti = 0.5   # high‑risk default
+        dti = 0.4
 
     while True:
         try:
             amount = float(input("Requested loan amount (GHS): "))
-            break
+            if amount <= 0:
+                print("Please enter a positive number.")
+            else:
+                break
         except (ValueError, TypeError):
             print("Please enter a valid number.")
 
@@ -47,23 +52,27 @@ def set_applicant_data():
 
 
 def get_ghana_decision():
-    query = "ghana_augmented_decision(Result, Confidence)."
+    """Get Ghana‑augmented decision, confidence, and recommended amount."""
+    query = "ghana_augmented_decision(Result, Confidence, Given)."
     results = list(prolog.query(query))
-    if results:
-        r = results[0]
-        result = r["Result"]
-        conf = r["Confidence"]
-        return result, conf
-    else:
+    if not results:
+        # Fallback: use global decision only
         global_query = "decision_with_confidence(Result, Confidence)."
         global_results = list(prolog.query(global_query))
         if global_results:
             r = global_results[0]
             result = r["Result"]
             conf = r["Confidence"]
-            return result, conf
+            given = 0  # no explicit given amount in global fallback
+            return result, conf, given
         else:
-            return "unknown", "low"
+            return "unknown", "low", 0
+    else:
+        r = results[0]
+        result = r["Result"]
+        conf = r["Confidence"]
+        given = r["Given"]
+        return result, conf, given
 
 
 def main():
@@ -72,16 +81,24 @@ def main():
         print("\n--- New applicant ---")
         set_applicant_data()
 
-        result, conf = get_ghana_decision()
-        print(f"\nDecision:     {result.upper()}")
-        print(f"Confidence:   {conf.upper()}")
+        result, conf, given = get_ghana_decision()
+        print(f"\nDecision:          {result.upper()}")
+        print(f"Confidence:        {conf.upper()}")
 
+        if given > 0:
+            print(f"Amount to give:    {given:.2f} GHS")
+
+        print()  # blank line before advice
+
+        # Run Prolog advice; it prints all the detailed reasons
         advice_query = f"advice({result})."
         advice_results = list(prolog.query(advice_query))
         if not advice_results:
             print("(No explicit advice rule defined for this result.)")
 
-        repeat = input("\nCheck another applicant? (y/n): ").strip().lower()
+        print()  # extra blank line after advice
+
+        repeat = input("Check another applicant? (y/n): ").strip().lower()
         if repeat != "y":
             print("Goodbye!")
             break

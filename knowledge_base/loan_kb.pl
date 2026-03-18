@@ -1,8 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% LOAN KB – Global + Ghana, with safe numeric guards, no instantiation_error
+% LOAN KB – Global + Ghana, no UNKNOWN, detailed advice, approved/rejected labels
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% --- DYNAMIC PREDICATES ---
 :- dynamic
     income/1,
     credit_score/1,
@@ -10,10 +9,10 @@
     debt_to_income/1,
     requested_amount/1.
 
-% --- Suppress singleton warnings (optional) ---
+% Suppress singleton warnings (optional, removes the messages)
 :- style_check(-singleton).
 
-% --- Advice clauses can be non‑contiguous ---
+% Advice clauses can be non‑contiguous
 :- discontiguous advice/1.
 
 % === SAFE COMPARISON GUARDS (Best Practice) ===
@@ -48,7 +47,6 @@ eligible(strong) :-
     income_level(I, high),
     credit_score(Cs),
     risk_level(Cs, low),
-    debt_to_income(Dti),
     dti_level(Dti, low),
     employment_years(Emp),
     safe_ge(Emp, 2).
@@ -58,7 +56,6 @@ eligible(medium) :-
     income_level(I, medium),
     credit_score(Cs),
     risk_level(Cs, medium),
-    debt_to_income(Dti),
     dti_level(Dti, medium),
     employment_years(Emp),
     safe_ge(Emp, 1).
@@ -66,7 +63,6 @@ eligible(medium) :-
 eligible(weak) :-
     income(I),
     credit_score(Cs),
-    debt_to_income(Dti),
     dti_level(Dti, high),
     employment_years(Emp),
     safe_ge(Emp, 0.5),
@@ -76,12 +72,19 @@ eligible(weak) :-
 loan_type(safe) :-
     eligible(strong),
     requested_amount(Amt),
+    safe_ge(I, 3000),
+    safe_ge(Cs, 550),
+    dti_level(Dti, low),
     safe_le(Amt, 20000).
 
 loan_type(conditional) :-
-    eligible(medium),
+    income(I),
+    safe_ge(I, 2000),
+    credit_score(Cs),
+    safe_ge(Cs, 500),
+    dti_level(Dti, low),
     requested_amount(Amt),
-    safe_gt(Amt, 20000),
+    safe_ge(Amt, 10000),
     safe_le(Amt, 50000).
 
 loan_type(risky) :-
@@ -95,6 +98,10 @@ loan_type(test_loan) :-
     requested_amount(Amt),
     safe_le(Amt, 3000),
     (eligible(weak) ; \+ (eligible(_))).
+
+loan_type(legacy_unknown) :-
+    \+ (loan_type(safe) ; loan_type(conditional) ;
+        loan_type(risky) ; loan_type(test_loan)).
 
 % === DEFAULTS FOR MISSING DATA (no numeric checks here) ===
 income(I) :-
@@ -117,7 +124,7 @@ requested_amount(Amt) :-
     \+ current_predicate(requested_amount/1),
     Amt = 5000.
 
-% === GLOBAL DECISION WITH CONFIDENCE ===
+% === GLOBAL DECISION WITH CONFIDENCE (no UNKNOWN) ===
 decision_with_confidence(Result, Conf) :-
     loan_type(safe),
     Result = approve,
@@ -138,27 +145,40 @@ decision_with_confidence(Result, Conf) :-
     Result = approve_with_test,
     Conf = medium.
 
-decision_with_confidence(Result, Conf) :-
-    \+ (loan_type(safe) ; loan_type(conditional) ;
-        loan_type(risky) ; loan_type(test_loan)),
-    Result = unknown,
-    Conf = low.
+% Fallback: always gives at least a decision (conditional)
+decision_with_confidence(conditional, medium) :-
+    loan_type(legacy_unknown).
 
-% === GLOBAL ADVICE ===
-advice(approve) :-
-    write('Loan approved with high confidence. Standard terms apply.').
-
-advice(conditional) :-
-    write('Loan may be approved under conditions (e.g., higher interest, lower amount). Further review recommended.').
-
-advice(reject) :-
-    write('Loan rejected due to high risk. Re‑apply after improving credit score or reducing debts.').
-
-advice(approve_with_test) :-
-    write('Loan approved as a small test loan to assess repayment behavior. Expect close monitoring.').
-
-advice(unknown) :-
-    write('Insufficient data or unclear risk. Manual review required to decide.').
+% === RECOMMENDED AMOUNT TO GIVE ===
+amount_to_give(Amt, Given) :-
+    income(I),
+    debt_to_income(Dti),
+    requested_amount(Amt),
+    dti_level(Dti, Level),
+    (   safe_ge(I, 5000) ->
+        % High income, can handle larger loans
+        (   safe_le(Dti, 0.3) ->
+            safe_le(Given, Amt),
+            Given = Amt
+        ;   safe_ge(Dti, 0.5) ->
+            safe_le(Given, 0.8 * Amt),
+            safe_ge(Given, 0.5 * Amt)
+        ;   % medium DTI
+            safe_le(Given, 0.95 * Amt),
+            safe_ge(Given, 0.7 * Amt)
+        )
+    ;   safe_ge(I, 2000) ->
+        % Medium income
+        (   safe_ge(Dti, 0.5) ->
+            safe_le(Given, 0.6 * Amt),
+            safe_ge(Given, 0.3 * Amt)
+        ;   safe_le(Given, 0.8 * Amt),
+            safe_ge(Given, 0.5 * Amt)
+        )
+    ;   % Low income
+        safe_le(Given, 0.5 * Amt),
+        safe_ge(Given, 0.2 * Amt)
+    ).
 
 % === GHANA‑SPECIFIC LAYERS (using safe‑guards) ===
 ghana_income_level(I, low)    :- safe_lt(I, 1000).
@@ -242,7 +262,7 @@ ghana_informal_test :-
     debt_to_income(Dti),
     dti_level(Dti, low).
 
-% === GHANA DECISIONS (no arithmetic checks here) ===
+% === GHANA DECISIONS (no arithmetic checks) ===
 ghana_decision(sacco_safe, high) :-
     ghana_sacco_strong.
 
@@ -261,18 +281,18 @@ ghana_decision(microloan_conditional, medium) :-
 ghana_decision(informal_test, medium) :-
     ghana_informal_test.
 
-ghana_decision(legacy, unknown_conf) :-
+ghana_decision(legacy, low) :-
     \+ (ghana_sacco_strong ; ghana_sacco_medium ; ghana_sacco_risky ;
         ghana_microloan_safe ; ghana_microloan_risky ; ghana_informal_test).
 
-% === GHANA‑AUGMENTED DECISION (no arithmetic, just logic + safe guards) ===
-ghana_augmented_decision(Result, Conf) :-
+% === GHANA‑AUGMENTED DECISION (no UNKNOWN, includes amount) ===
+ghana_augmented_decision(Result, Conf, Given) :-
     income(I),
     credit_score(Cs),
     employment_years(Emp),
     debt_to_income(Dti),
     requested_amount(Amt),
-    safe_ge(I, 0),      % sanity check (non‑var, numeric)
+    safe_ge(I, 0),
     safe_ge(Cs, 0),
     safe_ge(Emp, 0),
     safe_ge(Dti, 0),
@@ -296,24 +316,111 @@ ghana_augmented_decision(Result, Conf) :-
     ->  Result = informal_test,
         Conf = medium
     ;   decision_with_confidence(Result, Conf)
+    ),
+    amount_to_give(Amt, Given).
+
+% === ADVICE WITH DETAILED REASONS ===
+
+advice(Result) :-
+    income(I),
+    credit_score(Cs),
+    employment_years(Emp),
+    debt_to_income(Dti),
+    requested_amount(Amt),
+
+    write_decision_header(Result),
+    nl,
+    nl,
+    write('Reasons for this decision:'),
+    nl,
+
+    % 1. Income criteria
+    (   safe_ge(I, 2000) ->
+        write('  - Income meets minimum requirement (>= 2000 GHS).'),
+        nl
+    ;   write('  - Income too low (below 2000 GHS). Consider increasing income or applying for a smaller amount.'),
+        nl
+    ),
+
+    % 2. Credit score
+    (   safe_ge(Cs, 550) ->
+        write('  - Credit score acceptable (>= 550).'),
+        nl
+    ;   write('  - Credit score too low (below 550). Improve score by paying bills on time and reducing credit utilization.'),
+        nl
+    ),
+
+    % 3. Employment
+    (   safe_ge(Emp, 1) ->
+        write('  - Employment history is sufficient (1+ years).'),
+        nl
+    ;   write('  - Employment history too short (less than 1 year). Build longer work history.'),
+        nl
+    ),
+
+    % 4. DTI
+    (   safe_ge(Dti, 0.5) ->
+        write('  - Debt‑to‑income ratio too high (DTI >= 0.5). Reduce debts or increase income before re‑applying.'),
+        nl
+    ;   write('  - Debt‑to‑income ratio is acceptable (DTI < 0.5).'),
+        nl
+    ),
+
+    % 5. Amount size
+    (   safe_ge(Amt, 30000) ->
+        write('  - Requested amount is large; consider a smaller amount to improve chances.'),
+        nl
+    ;   write('  - Requested amount is reasonable for your profile.'),
+        nl
+    ),
+
+    % 6. General advice line
+    (   Result = approve ; Result = sacco_safe ; Result = microloan_safe ->
+        write('  - Overall profile is strong; no major weaknesses detected.'),
+        nl
+    ;   Result = conditional ; Result = sacco_conditional ; Result = microloan_conditional ->
+        write('  - Application conditionally approved; minor weaknesses but overall acceptable.'),
+        nl
+    ;   Result = reject ; Result = sacco_reject ->
+        write('  - Application rejected due to multiple weaknesses. Improve income, credit, or DTI.'),
+        nl
+    ;   true
     ).
 
-% === GHANA‑SPECIFIC ADVICE ===
-advice(sacco_safe) :-
-    write('Loan approved as a SACCO‑style loan with high confidence. Regular group meetings and savings are required.').
+% --- Decision header: "Loan Approved", "Loan Rejected", etc. ---
+write_decision_header(approve) :-
+    write('Loan Approved').
 
-advice(sacco_conditional) :-
-    write('SACCO loan may be approved with smaller amount or higher interest. Close monitoring and savings requirement apply.').
+write_decision_header(conditional) :-
+    write('Loan Conditionally Approved (with conditions)').
 
-advice(sacco_reject) :-
-    write('SACCO loan rejected due to high risk or high DTI. Re‑apply after reducing debts or increasing savings history.').
+write_decision_header(reject) :-
+    write('Loan Rejected').
 
-advice(microloan_safe) :-
-    write('Microloan approved with high confidence. Typical 3–6 month term and weekly repayments.').
+write_decision_header(sacco_safe) :-
+    write('Loan Approved (SACCO Safe)').
 
-advice(microloan_conditional) :-
-    write('Microloan may be approved only for a smaller amount. Expect intensive repayment monitoring.').
+write_decision_header(sacco_conditional) :-
+    write('Loan Conditionally Approved (SACCO, with conditions)').
 
-advice(informal_test) :-
-    write('Small informal‑sector test loan approved. Repayment history will be tracked to qualify for larger amounts.').
+write_decision_header(sacco_reject) :-
+    write('Loan Rejected (SACCO)').
+
+write_decision_header(microloan_safe) :-
+    write('Loan Approved (Microloan, Safe)').
+
+write_decision_header(microloan_conditional) :-
+    write('Loan Conditionally Approved (Microloan, with conditions)').
+
+write_decision_header(informal_test) :-
+    write('Loan Approved (Informal‑sector Test Loan)').
+
+write_decision_header(conditional_multi_co) :-
+    write('Loan Conditionally Approved (with co‑signers)').
+
+write_decision_header(approve_multi_co) :-
+    write('Loan Approved (with multiple co‑signers)').
+
+write_decision_header(_) :-
+    write('Loan Decision Review Required').
 
