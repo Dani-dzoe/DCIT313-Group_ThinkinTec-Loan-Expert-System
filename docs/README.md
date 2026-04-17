@@ -56,4 +56,11 @@ The project follows this directory layout:
 
 ```bash
 pip install pyswip
+```
 
+### Team Members
+- Daniel Mawutor Dzotepe
+- Eric Ananga
+- Jerry Kaborni
+- Amoako Philip
+- Abiokor Lawrencia Tetteh
