@@ -58,7 +58,7 @@ The project follows this directory layout:
 pip install pyswip
 ```
 
-### Team Tetteh
+### Team Members
 - [Daniel Mawutor Dzotepe-[Dani-dzoe]- 22028361]
 - [Philip Marfo Amoako -[amoakophilip] -22078203]
 - [Irene Tetteh-[Abeikah]-22013982]
